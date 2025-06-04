@@ -1,0 +1,442 @@
+PlanilhaControle.js
+
+const ExcelJS = require("exceljs");
+const PlanilhaModelo = require("../modelo/PlanilhaModelo");
+const path = require("path");
+const fs = require("fs");
+
+module.exports = class PlanilhaControle {
+    constructor() {
+        this._modelo = new PlanilhaModelo();
+    }
+
+    gerarPlanilha = async () => {
+        const dados = await this._modelo.buscarDadosClientes();
+
+        if (!dados || dados.length === 0) {
+            throw new Error("Nenhum dado encontrado.");
+        }
+
+        const workbook = new ExcelJS.Workbook();
+        const planilha = workbook.addWorksheet("Clientes");
+
+        // Define colunas com largura e cabeçalho
+        const colunas = Object.keys(dados[0]);
+        planilha.columns = colunas.map(col => ({
+            header: col,
+            key: col,
+            width: 20 // largura maior para melhor visualização
+        }));
+
+        // Adiciona os dados
+        dados.forEach((linha) => {
+            planilha.addRow(linha);
+        });
+
+        // Use caminho absoluto para evitar problemas
+        const caminho = path.resolve(__dirname, "../../planilhas/Controle de Acesso.xlsx");
+
+        // Certifique-se que a pasta existe, se não, cria
+        const pasta = path.dirname(caminho);
+        if (!fs.existsSync(pasta)) {
+            fs.mkdirSync(pasta, { recursive: true });
+        }
+
+        await workbook.xlsx.writeFile(caminho);
+
+        // Verifica se o arquivo foi criado
+        if (!fs.existsSync(caminho)) {
+            throw new Error("Falha ao criar a planilha.");
+        }
+
+        return caminho;
+    };
+};
+
+
+PlanilhaModelo.js
+
+const Banco = require("./banco"); // ajuste o caminho se necessário
+
+module.exports = class PlanilhaModelo {
+    async buscarDadosClientes() {
+        const conexao = Banco.getConexao(); // obtém a conexão (que é do tipo mysql2 Connection)
+        // Usar Promise para a query pois o método 'execute' não retorna Promise por padrão com createConnection sem promise
+        return new Promise((resolve, reject) => {
+            conexao.execute(
+                `SELECT dataVisita, origem, horarioEntrada, horarioSaida from registro `,
+                (erro, resultados) => {
+                    if (erro) {
+                        reject(erro);
+                    } else {
+                        resolve(resultados);
+                    }
+                }
+            );
+        });
+    }
+};
+
+PlanilhaRoteador.js
+const express = require("express");
+const PlanilhaControle = require("../controle/PlanilhaControle");
+
+module.exports = class PlanilhaRoteador {
+    criarRotasPlanilha() {
+        const rota = express.Router();
+        const controle = new PlanilhaControle();
+
+        rota.get("/", async (req, res) => {
+            try {
+                const caminho = await controle.gerarPlanilha();
+                console.log("Caminho da planilha:", caminho);
+
+                res.download(caminho, (err) => {
+                    if (err) {
+                        console.error("Erro no download da planilha:", err);
+                        res.status(500).send("Erro ao enviar a planilha.");
+                    }
+                });
+            } catch (err) {
+                console.error("Erro ao gerar planilha:", err);
+                res.status(500).send("Erro ao gerar planilha.");
+            }
+        });
+
+        return rota;
+    }
+};
+
+
+index.html(com o botão da planilha)
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Controle de Visitantes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #1e3a8a; /* Azul escuro */
+      --secondary-color: #3b82f6; /* Azul médio */
+      --background-color: #f0f4f8;
+      --text-color: #1f2937; /* Cinza escuro */
+      --card-background: #ffffff;
+      --button-hover: #1d4ed8; /* Azul um pouco mais vivo */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    body {
+      background-color: var(--background-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1200px;
+      text-align: center;
+    }
+
+    h1 {
+      margin-bottom: 30px;
+      color: var(--primary-color);
+      font-size: 2.5rem;
+      font-weight: 600;
+    }
+
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+
+    .section {
+      background: var(--card-background);
+      border-radius: 20px;
+      padding: 30px 20px;
+      box-shadow: 0 4px 12px rgba(30, 58, 138, 0.2);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .section:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 20px rgba(30, 58, 138, 0.3);
+    }
+
+    .section h2 {
+      color: var(--primary-color);
+      margin-bottom: 10px;
+      font-size: 1.5rem;
+    }
+
+    .section p {
+      color: var(--text-color);
+      margin-bottom: 20px;
+      font-size: 1rem;
+    }
+
+    .button {
+      background-color: var(--primary-color);
+      color: #ffffff;
+      padding: 12px 25px;
+      border: none;
+      border-radius: 12px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: background 0.3s ease;
+      display: inline-block;
+    }
+
+    .button:hover {
+      background-color: var(--button-hover);
+    }
+
+    .footer {
+      margin-top: 40px;
+    }
+
+    .logout {
+      background-color: #dc2626; /* Vermelho logout */
+    }
+
+    .logout:hover {
+      background-color: #b91c1c;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Sistema de Controle de Visitantes</h1>
+
+    <div class="grid-container">
+      <div class="section">
+        <h2>Visitante</h2>
+        <p>Cadastrar, consultar e atualizar informações da Visitante.</p>
+        <a class="button" href="indexVisitante.html">Gerenciar Retornos</a>
+      </div>
+      <div class="section">
+        <h2>Gerar Planilhas</h2>
+        <p>Gerar as planilhas de controle de acesso.</p>
+      <a class="button" href="secaoGerar.html" >Gerar Planilha</a>
+      </div>
+      <div class="section admin-section" id="adminSection" style="display: none;">
+        <h2>Empresa</h2>
+        <p>Cadastrar, consultar e atualizar informações da empresa.</p>
+        <a class="button" href="indexEmpresa.html">Empresa</a>
+      </div>
+
+      <div class="section admin-section" id="adminSection" style="display: none;">
+        <h2>Gestão Administrativa</h2>
+        <p>Área exclusiva para administradores.</p>
+        <a class="button" href="cadastroFuncionario.html">Cadastro de Funcionário</a>
+      </div>
+    </div>
+
+    <div class="footer">
+      <a class="button logout" href="#" onclick="logout()">Logout</a>
+    </div>
+  </div>
+
+  <script>
+    function getPayloadFromToken(token) {
+      try {
+        const payloadBase64 = token.split('.')[1];
+        const payloadDecoded = atob(payloadBase64);
+        return JSON.parse(payloadDecoded);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const payload = getPayloadFromToken(token);
+        if (payload && payload.role === 'adm') {
+          document.getElementById('adminSection').style.display = 'block';
+        }
+      } else {
+        window.location.href = 'login.html';
+      }
+    });
+
+    function logout() {
+      localStorage.removeItem('token');
+      window.location.href = 'login.html';
+    }
+  </script>
+
+</body>
+</html>
+
+aba de gerar a planilha
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Controle de Visitantes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #1e3a8a; /* Azul escuro */
+      --secondary-color: #3b82f6; /* Azul médio */
+      --background-color: #f0f4f8;
+      --text-color: #1f2937; /* Cinza escuro */
+      --card-background: #ffffff;
+      --button-hover: #1d4ed8; /* Azul um pouco mais vivo */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    body {
+      background-color: var(--background-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1200px;
+      text-align: center;
+    }
+
+    h1 {
+      margin-bottom: 30px;
+      color: var(--primary-color);
+      font-size: 2.5rem;
+      font-weight: 600;
+    }
+
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+
+    .section {
+      background: var(--card-background);
+      border-radius: 20px;
+      padding: 30px 20px;
+      box-shadow: 0 4px 12px rgba(30, 58, 138, 0.2);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .section:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 20px rgba(30, 58, 138, 0.3);
+    }
+
+    .section h2 {
+      color: var(--primary-color);
+      margin-bottom: 10px;
+      font-size: 1.5rem;
+    }
+
+    .section p {
+      color: var(--text-color);
+      margin-bottom: 20px;
+      font-size: 1rem;
+    }
+
+    .button {
+      background-color: var(--primary-color);
+      color: #ffffff;
+      padding: 12px 25px;
+      border: none;
+      border-radius: 12px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: background 0.3s ease;
+      display: inline-block;
+    }
+
+    .button:hover {
+      background-color: var(--button-hover);
+    }
+
+    .footer {
+      margin-top: 40px;
+    }
+
+    .logout {
+      background-color: #dc2626; /* Vermelho logout */
+    }
+
+    .logout:hover {
+      background-color: #b91c1c;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Geração de Planilhas</h1>
+
+    <div class="grid-container">
+      <div class="section">
+        <h2>Gerar Planilha</h2>
+        <a href="javascript:void(0);" class="button" id="gerar-planilha">Gerar</a>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.getElementById("gerar-planilha").addEventListener("click", function() {
+    // Fazendo a requisição para a rota do servidor
+    fetch('/planilha')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Erro ao gerar planilha.');
+            }
+            return response.blob(); // Converte a resposta para um blob (arquivo)
+        })
+        .then(blob => {
+            // Cria um link temporário para fazer o download
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = 'Controle de Acesso.xlsx'; // Define o nome do arquivo
+            document.body.appendChild(a);
+            a.click(); // Dispara o download
+            a.remove(); // Remove o link temporário
+        })
+        .catch(error => {
+            console.error('Erro ao gerar a planilha:', error);
+            alert('Ocorreu um erro ao tentar gerar a planilha.');
+        });
+});
+
+  </script>
+</body>
+</html>
+
+
+const PlanilhaRoteador = require("./backend/roteador/PlanilhaRoteador");
+
+this._PlanilhaRoteador = new PlanilhaRoteador();
+
+this._app.use("/planilha", this._PlanilhaRoteador.criarRotasPlanilha());
