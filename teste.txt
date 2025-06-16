@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <title>Gerador de PDF com Tabela</title>
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- jsPDF AutoTable -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+  <h1>Gerador de PDF tipo planilha</h1>
+  <button id="btnGerarPdf">Gerar PDF</button>
+
+  <script>
+    document.getElementById('btnGerarPdf').addEventListener('click', () => {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      // Cabeçalho da tabela
+      const cabeçalho = [['ID', 'Nome', 'Idade', 'Cidade']];
+      // Dados da tabela
+      const dados = [
+        [1, 'Ana', 28, 'São Paulo'],
+        [2, 'Bruno', 34, 'Rio de Janeiro'],
+        [3, 'Carla', 23, 'Belo Horizonte'],
+        [4, 'Daniel', 45, 'Curitiba'],
+      ];
+
+      // Gerar a tabela no PDF com AutoTable
+      doc.autoTable({
+        head: cabeçalho,
+        body: dados,
+        styles: { halign: 'center' },
+        headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' },
+      });
+
+      // Salvar arquivo
+      doc.save('planilha_exemplo.pdf');
+    });
+  </script>
+  
+</body>
+</html>
